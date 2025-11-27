@@ -235,8 +235,15 @@ jobs:
 
     - name: 📦 Install dependencies
       run: |
+        python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-benchmark
+
+    - name: ⚙️ Create .env file for testing
+      run: |
+        echo "MONGO_STRING=${{ secrets.MONGO_STRING }}" > .env
+        echo "DB_NAME=Test-Performance" >> .env
+        echo "COLLECTION_NAME=test_performance" >> .env
 
     - name: ⚡ Run performance tests
       run: |
