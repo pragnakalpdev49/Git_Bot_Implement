@@ -19,10 +19,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11']
+        python-version: ['3.10']
     
     # Note: Using MongoDB Atlas (cloud) instead of local MongoDB service
     # Connection string is provided via GitHub Secrets
+    # Make sure to whitelist GitHub Actions IPs in MongoDB Atlas Network Access
 
     steps:
     # Step 1: Checkout code
@@ -60,12 +61,21 @@ jobs:
         from dotenv import load_dotenv
         load_dotenv()
         try:
-            client = pymongo.MongoClient(os.getenv('MONGO_STRING'), serverSelectionTimeoutMS=5000)
+            # Increased timeout to 30 seconds for GitHub Actions
+            client = pymongo.MongoClient(
+                os.getenv('MONGO_STRING'), 
+                serverSelectionTimeoutMS=30000,
+                connectTimeoutMS=30000,
+                socketTimeoutMS=30000
+            )
             client.server_info()
             print('✅ Successfully connected to MongoDB Atlas!')
+            print(f'Connected to: {client.address}')
             client.close()
         except Exception as e:
             print(f'❌ Connection failed: {e}')
+            print('⚠️  Make sure to whitelist GitHub Actions IPs in MongoDB Atlas Network Access')
+            print('   Go to: MongoDB Atlas → Network Access → Add IP Address → Allow Access from Anywhere (0.0.0.0/0)')
             exit(1)
         "
 

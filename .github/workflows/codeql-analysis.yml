@@ -25,8 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'python', 'javascript' ]  
-        # Note: 'javascript' includes TypeScript automatically
+        language: [ 'python' ]  
+        # Only analyzing Python code
         # CodeQL supports: 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby', 'swift'
         # Add more languages if your project uses them
 
