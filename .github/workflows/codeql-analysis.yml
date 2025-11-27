@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'python', 'javascript', 'java', 'cpp', 'csharp', 'go', 'ruby', 'swift' ]  
+        language: [ 'python', 'javascript','typescript']  
         # CodeQL supports: 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby', 'swift'
         # Add more languages if your project uses them
 
