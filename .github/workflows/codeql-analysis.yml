@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: '0 0 * * 1'  # Run every Monday at midnight
 
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
 jobs:
   analyze:
     name: Analyze
@@ -20,7 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'python', 'javascript','typescript']  
+        language: [ 'python', 'javascript' ]  
+        # Note: 'javascript' includes TypeScript automatically
         # CodeQL supports: 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby', 'swift'
         # Add more languages if your project uses them
 
