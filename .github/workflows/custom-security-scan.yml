@@ -1,0 +1,238 @@
+name: "Complete Security Scanning Suite"
+
+# ============================================================================
+# ALL-IN-ONE SECURITY WORKFLOW
+# ============================================================================
+# This workflow includes ALL security scanning in one file for easy management:
+#
+# 1. GitGuardian - Secret scanning
+# 2. CodeQL Full Analysis - Comprehensive code vulnerability scanning
+# 3. SQL Injection Detection - Specific SQL injection checks
+# 4. XSS Detection - Cross-site scripting checks
+# 5. Python Security (Bandit) - Python-specific security linting
+# 6. Dependency Scanning (Trivy) - Vulnerability scanning for dependencies
+# 7. Custom Pattern Matching - Custom security patterns
+#
+# You can run ALL checks or specific ones using manual trigger options.
+# ============================================================================
+
+# Run on specific events
+on:
+  push:
+    branches: 
+      - main
+      - dev
+    paths:
+      - '**.py'          # Only run when Python files change
+      - '**.js'          # Only run when JavaScript files change
+      - '**.ts'          # Only run when TypeScript files change
+  
+  pull_request:
+    branches: 
+      - main
+      - dev
+  
+  # Schedule - Run weekly on Monday at midnight
+  schedule:
+    - cron: '0 0 * * 1'
+  
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of scan to run'
+        required: true
+        type: choice
+        options:
+          - all
+          - secrets-only
+          - code-only
+          - codeql-full
+          - sql-injection
+          - xss
+          - hardcoded-secrets
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  # Job 1: Scan for Secrets (GitGuardian)
+  secret-scanning:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == 'secrets-only' || github.event.inputs.scan_type == 'hardcoded-secrets' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: GitGuardian scan
+        uses: GitGuardian/ggshield-action@v1
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+        with:
+          args: --config .gitguardian.yaml
+
+  # Job 2: Full CodeQL Analysis (Standard)
+  codeql-full-analysis:
+    name: CodeQL Full Analysis
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == 'code-only' || github.event.inputs.scan_type == 'codeql-full' || github.event_name != 'workflow_dispatch'
+    
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'python', 'javascript' ]
+        # Supported: cpp, csharp, go, java, javascript, python, ruby, swift
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Use comprehensive security queries
+          queries: security-extended,security-and-quality
+          config-file: .github/codeql-config.yml
+      
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
+
+  # Job 3: SQL Injection Detection
+  sql-injection-scan:
+    name: SQL Injection Check
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == 'code-only' || github.event.inputs.scan_type == 'sql-injection' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python,javascript
+          queries: security-extended
+          config-file: .github/codeql-config.yml
+      
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:sql-injection"
+
+  # Job 4: XSS (Cross-Site Scripting) Detection
+  xss-scan:
+    name: XSS Vulnerability Check
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == 'code-only' || github.event.inputs.scan_type == 'xss' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: security-extended
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:xss-check"
+
+  # Job 5: Python-Specific Security Scan
+  python-security:
+    name: Python Security Analysis (Bandit)
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == 'code-only' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Install Bandit (Python security linter)
+        run: pip install bandit
+      
+      - name: Run Bandit security scan
+        run: |
+          bandit -r . -f json -o bandit-report.json || true
+          bandit -r . -f txt
+        continue-on-error: true
+      
+      - name: Upload Bandit results
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+
+  # Job 6: Dependency Vulnerability Scan
+  dependency-scan:
+    name: Dependency Security Check (Trivy)
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == 'code-only' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Job 7: Custom Pattern Matching
+  custom-patterns:
+    name: Custom Security Patterns
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check for hardcoded IPs
+        run: |
+          echo "Checking for hardcoded IP addresses..."
+          grep -r -E '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' --include="*.py" --include="*.js" . || echo "No hardcoded IPs found"
+      
+      - name: Check for TODO security notes
+        run: |
+          echo "Checking for security TODOs..."
+          grep -r "TODO.*security\|FIXME.*security" --include="*.py" --include="*.js" . || echo "No security TODOs found"
+      
+      - name: Check for debug statements
+        run: |
+          echo "Checking for debug statements..."
+          grep -r "console.log\|print(" --include="*.py" --include="*.js" . || echo "No debug statements found"
