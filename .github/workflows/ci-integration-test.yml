@@ -20,19 +20,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11']
-        mongodb-version: ['4.4', '5.0', '6.0']
     
-    # Service containers to run with job
-    services:
-      mongodb:
-        image: mongo:${{ matrix.mongodb-version }}
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})' --quiet"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # Note: Using MongoDB Atlas (cloud) instead of local MongoDB service
+    # Connection string is provided via GitHub Secrets
 
     steps:
     # Step 1: Checkout code
@@ -60,26 +50,26 @@ jobs:
         echo "DB_NAME=Processed-Orders" >> .env
         echo "COLLECTION_NAME=processed_orders" >> .env
 
-    # Step 5: Wait for MongoDB to be ready
-    - name: ⏳ Wait for MongoDB
+    # Step 5: Verify MongoDB Atlas connection
+    - name: 🔍 Verify MongoDB Atlas connection
       run: |
-        echo "Waiting for MongoDB to be ready..."
-        for i in {1..30}; do
-          if mongosh --eval "db.adminCommand('ping')" --quiet; then
-            echo "✅ MongoDB is ready!"
-            break
-          fi
-          echo "Waiting... ($i/30)"
-          sleep 2
-        done
+        echo "Testing MongoDB Atlas connection..."
+        python -c "
+        import pymongo
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        try:
+            client = pymongo.MongoClient(os.getenv('MONGO_STRING'), serverSelectionTimeoutMS=5000)
+            client.server_info()
+            print('✅ Successfully connected to MongoDB Atlas!')
+            client.close()
+        except Exception as e:
+            print(f'❌ Connection failed: {e}')
+            exit(1)
+        "
 
-    # Step 6: Verify MongoDB connection
-    - name: 🔍 Verify MongoDB connection
-      run: |
-        mongosh --eval "db.version()"
-        mongosh --eval "db.adminCommand({listDatabases: 1})"
-
-    # Step 7: Run unit tests
+    # Step 6: Run unit tests
     - name: 🧪 Run unit tests
       run: |
         echo "Running unit tests..."
@@ -119,16 +109,29 @@ jobs:
       run: |
         echo "Testing the actual script..."
         
-        # Insert test data into MongoDB
-        mongosh --eval '
-          use("Processed-Orders");
-          db.processed_orders.insertOne({
-            "_id": "AI021438-001",
-            "status": "processed",
-            "amount": 1000,
-            "date": new Date()
-          });
-        '
+        # Insert test data into MongoDB Atlas using Python
+        python -c "
+        import pymongo
+        import os
+        from dotenv import load_dotenv
+        from datetime import datetime
+        
+        load_dotenv()
+        client = pymongo.MongoClient(os.getenv('MONGO_STRING'))
+        db = client['Processed-Orders']
+        collection = db['processed_orders']
+        
+        # Insert test document
+        test_doc = {
+            '_id': 'AI021438-001',
+            'status': 'processed',
+            'amount': 1000,
+            'date': datetime.now()
+        }
+        collection.replace_one({'_id': 'AI021438-001'}, test_doc, upsert=True)
+        print('✅ Test data inserted successfully!')
+        client.close()
+        "
         
         # Run the script
         python fetch_data_from_mongo.py
@@ -172,7 +175,7 @@ jobs:
         echo "Test Summary Report"
         echo "==================================="
         echo "Python Version: ${{ matrix.python-version }}"
-        echo "MongoDB Version: ${{ matrix.mongodb-version }}"
+        echo "MongoDB: Atlas (Cloud)"
         echo "Status: ${{ job.status }}"
         echo "==================================="
 
@@ -219,11 +222,7 @@ jobs:
     name: Performance Tests
     runs-on: ubuntu-latest
     
-    services:
-      mongodb:
-        image: mongo:6.0
-        ports:
-          - 27017:27017
+    # Note: Using MongoDB Atlas (cloud) for performance testing
 
     steps:
     - name: 📥 Checkout repository
