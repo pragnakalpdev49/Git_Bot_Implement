@@ -1,7 +1,11 @@
 import pymongo
+import os
+import dotenv
+
+dotenv.load_dotenv()
 
 # MongoDB connection setup
-MONGO_STRING = "mongodb+srv://mittal:mittaltest@production.xwwgilj.mongodb.net/?retryWrites=true&w=majority"
+MONGO_STRING = os.getenv("MONGO_STRING")
 client = pymongo.MongoClient(MONGO_STRING)
 database = client["Processed-Orders"]
 collection = database["processed_orders"]
